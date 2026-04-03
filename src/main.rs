@@ -71,6 +71,9 @@ fn main() {
     let mp = MultiProgress::new();
     let style = create_progress_style();
 
+    let draw_target = indicatif::ProgressDrawTarget::stderr();
+    mp.set_draw_target(draw_target);
+
     let mut downloads: Vec<ActiveDownload> = Vec::new();
 
     for input in &inputs {
@@ -122,7 +125,7 @@ fn main() {
 
         let pb = mp.add(ProgressBar::new(0));
         pb.set_style(style.clone());
-        pb.set_prefix(label.clone());
+        pb.set_message(label.clone());
         pb.enable_steady_tick(std::time::Duration::from_millis(100));
 
         let is_torrent = matches!(input, InputType::TorrentFile(_));

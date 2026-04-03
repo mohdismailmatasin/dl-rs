@@ -100,11 +100,13 @@ pub fn parse_tell_status(json: &str) -> Option<Aria2Status> {
             .to_string(),
         completed_length: result
             .get("completedLength")
-            .and_then(|v| v.as_u64())
+            .and_then(|v| v.as_str().and_then(|s| s.parse::<u64>().ok()))
+            .or_else(|| result.get("completedLength").and_then(|v| v.as_u64()))
             .unwrap_or(0),
         total_length: result
             .get("totalLength")
-            .and_then(|v| v.as_u64())
+            .and_then(|v| v.as_str().and_then(|s| s.parse::<u64>().ok()))
+            .or_else(|| result.get("totalLength").and_then(|v| v.as_u64()))
             .unwrap_or(0),
         info_hash: result
             .get("infoHash")

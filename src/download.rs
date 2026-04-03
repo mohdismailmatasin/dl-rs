@@ -141,12 +141,15 @@ pub fn cleanup_torrent_files(save_dir: &PathBuf, dl: &ActiveDownload) {
 
 pub fn create_progress_style() -> ProgressStyle {
     ProgressStyle::with_template(
-        "{spinner:.green} [{prefix}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} @ {binary_bytes_per_sec}",
+        "{msg} [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} @ {binary_bytes_per_sec}",
     )
     .unwrap()
-    .with_key("eta", |state: &indicatif::ProgressState, w: &mut dyn Write| {
-        write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap();
-    })
+    .with_key(
+        "eta",
+        |state: &indicatif::ProgressState, w: &mut dyn Write| {
+            write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap();
+        },
+    )
     .progress_chars("\u{2588}\u{2593}\u{2592}\u{2591}")
 }
 
@@ -262,7 +265,11 @@ pub fn run_download_loop(
                         continue;
                     }
 
+                    if parsed.total_length > 0 && dl.total_bytes == 0 {
+                        dl.total_bytes = parsed.total_length;
+                    }
                     if dl.total_bytes > 0 {
+                        dl.pb.set_length(dl.total_bytes);
                         dl.pb.set_position(dl.total_bytes);
                     }
                     dl.pb.finish_with_message("\u{2713} Complete!");
@@ -315,6 +322,10 @@ pub fn run_download_loop(
 
         if all_done {
             aria2.kill();
+
+            for dl in downloads.iter() {
+                dl.pb.finish_and_clear();
+            }
 
             let elapsed = overall_start.elapsed();
             let total_bytes: u64 = downloads.iter().map(|d| d.total_bytes).sum();
