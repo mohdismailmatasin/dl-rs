@@ -182,6 +182,45 @@ pub fn run_download_loop(
         if crate::SHUTDOWN.load(std::sync::atomic::Ordering::SeqCst) {
             eprintln!("\n\u{2717} Interrupted by user");
             aria2.kill();
+
+            for dl in downloads.iter() {
+                if !dl.done {
+                    cleanup_torrent_files(save_dir, dl);
+                    let aria2_file = save_dir.join(format!("{}.aria2", dl.label));
+                    if aria2_file.exists() {
+                        let _ = fs::remove_file(&aria2_file);
+                    }
+                    let partial = save_dir.join(&dl.label);
+                    if partial.exists() {
+                        let _ = fs::remove_file(&partial);
+                    }
+                }
+            }
+
+            let elapsed = overall_start.elapsed();
+            let total_bytes: u64 = downloads
+                .iter()
+                .filter(|d| d.done)
+                .map(|d| d.total_bytes)
+                .sum();
+            let completed = downloads.iter().filter(|d| d.done).count();
+            let interrupted = downloads.len() - completed;
+
+            let yellow_bold = "\x1b[1;33m";
+            let reset = "\x1b[0m";
+            println!();
+            if completed > 0 {
+                println!("  {yellow_bold}Total:{reset} {}", format_size(total_bytes));
+                println!(
+                    "  {yellow_bold}Completed:{reset} {}/{}",
+                    completed,
+                    downloads.len()
+                );
+            }
+            if interrupted > 0 {
+                println!("  {yellow_bold}Interrupted:{reset} {}", interrupted);
+            }
+            println!("  {yellow_bold}Time:{reset} {:.1}s", elapsed.as_secs_f64());
             std::process::exit(130);
         }
 
