@@ -50,21 +50,32 @@ pub fn display_name(input: &InputType) -> String {
 
 pub fn print_inputs(inputs: &[InputType], connections: u32, save_dir: &PathBuf) {
     let orange = "\x1b[1;38;5;214m";
+    let light_blue = "\x1b[1;94m";
+    let purple = "\x1b[1;35m";
     let reset = "\x1b[0m";
-    println!("\n\u{2b61} Downloading {} file(s)...", inputs.len());
-    for input in inputs {
+    let is_multi = inputs.len() > 1;
+    println!(
+        "\n{light_blue}🔻️ Downloading{reset} {} file(s)...",
+        inputs.len()
+    );
+    for (i, input) in inputs.iter().enumerate() {
+        let idx = if is_multi {
+            format!(" {} ", i + 1)
+        } else {
+            " ".to_string()
+        };
         match input {
             InputType::HttpUrl(url) => {
-                println!("{orange}\u{27ea} Address \u{27eb}{reset} {url}");
+                println!("{orange}\u{27ea} +{}\u{27eb}{reset} {url}", idx);
             }
             InputType::TorrentFile(p) => {
-                println!("{orange}\u{27ea} Torrent \u{27eb}{reset} {}", p.display());
+                println!("{orange}\u{27ea} +{}\u{27eb}{reset} {}", idx, p.display());
             }
         }
     }
-    println!("{orange}\u{27ea} Connection \u{27eb}{reset} {connections}");
+    println!("{purple}\u{27ea} = \u{27eb}{reset} {connections}");
     println!(
-        "{orange}\u{27ea} Save Path \u{27eb}{reset} {}\n",
+        "{purple}\u{27ea} / \u{27eb}{reset} {}\n",
         save_dir.display()
     );
 }
@@ -94,6 +105,8 @@ pub struct ActiveDownload {
     pub total_bytes: u64,
     pub start_time: Instant,
     pub metadata_done: bool,
+    pub index: usize,
+    pub is_multi: bool,
 }
 
 impl ActiveDownload {
@@ -103,6 +116,8 @@ impl ActiveDownload {
         pb: ProgressBar,
         is_torrent: bool,
         torrent_path: Option<PathBuf>,
+        index: usize,
+        is_multi: bool,
     ) -> Self {
         Self {
             gid,
@@ -117,6 +132,8 @@ impl ActiveDownload {
             total_bytes: 0,
             start_time: Instant::now(),
             metadata_done: !is_torrent,
+            index,
+            is_multi,
         }
     }
 }
@@ -272,7 +289,8 @@ pub fn run_download_loop(
                         dl.pb.set_length(dl.total_bytes);
                         dl.pb.set_position(dl.total_bytes);
                     }
-                    dl.pb.finish_with_message("\u{2713} Complete!");
+                    dl.pb
+                        .finish_with_message("\x1b[1;32m\u{2713} Complete!\x1b[0m");
                     dl.done = true;
 
                     if dl.is_torrent {
@@ -296,7 +314,20 @@ pub fn run_download_loop(
                     let elapsed = now.duration_since(dl.last_time).as_secs_f64();
                     if elapsed >= 0.5 && parsed.completed_length != dl.last_completed {
                         let speed = (parsed.completed_length - dl.last_completed) as f64 / elapsed;
-                        dl.pb.set_message(format!("@ {:.1} KiB/s", speed / 1024.0));
+                        let speed_str = format!("{:.1} KiB/s", speed / 1024.0);
+                        if dl.is_multi {
+                            let orange = "\x1b[1;38;5;214m";
+                            let reset = "\x1b[0m";
+                            dl.pb.set_message(format!(
+                                "{orange}+ {}{reset} @ {}",
+                                dl.index + 1,
+                                speed_str
+                            ));
+                        } else {
+                            let orange = "\x1b[1;38;5;214m";
+                            let reset = "\x1b[0m";
+                            dl.pb.set_message(format!("{orange}+{reset} {}", speed_str));
+                        }
                         dl.last_completed = parsed.completed_length;
                         dl.last_time = now;
                     }
@@ -324,7 +355,7 @@ pub fn run_download_loop(
             aria2.kill();
 
             for dl in downloads.iter() {
-                dl.pb.finish_and_clear();
+                dl.pb.finish();
             }
 
             let elapsed = overall_start.elapsed();
@@ -332,27 +363,17 @@ pub fn run_download_loop(
             let completed = downloads.iter().filter(|d| d.done).count();
             let failed = downloads.len() - completed;
 
-            let sep = "\u{2500}".repeat(60);
-            println!("\n{}", sep);
-            println!("\u{2713} All downloads complete!");
             println!();
-            for dl in downloads.iter() {
-                let size = if dl.total_bytes > 0 {
-                    format_size(dl.total_bytes)
-                } else {
-                    "unknown".to_string()
-                };
-                let dur = dl.start_time.elapsed();
-                println!("  {}  {}  ({:.1}s)", dl.label, size, dur.as_secs_f64());
-            }
-            println!();
-            println!("  Total: {}", format_size(total_bytes));
-            println!("  Completed: {}/{}", completed, downloads.len());
+            println!("  \x1b[1;33mTotal:\x1b[0m {}", format_size(total_bytes));
+            println!(
+                "  \x1b[1;33mCompleted:\x1b[0m {}/{}",
+                completed,
+                downloads.len()
+            );
             if failed > 0 {
-                println!("  Failed: {}", failed);
+                println!("  \x1b[1;33mFailed:\x1b[0m {}", failed);
             }
-            println!("  Time: {:.1}s", elapsed.as_secs_f64());
-            println!("{}", sep);
+            println!("  \x1b[1;33mTime:\x1b[0m {:.1}s", elapsed.as_secs_f64());
             return;
         }
 

@@ -76,7 +76,9 @@ fn main() {
 
     let mut downloads: Vec<ActiveDownload> = Vec::new();
 
-    for input in &inputs {
+    let is_multi = inputs.len() > 1;
+
+    for (i, input) in inputs.iter().enumerate() {
         let label = display_name(input);
         let dir_opt = format!(r#""dir":"{}""#, save_dir.display());
 
@@ -140,6 +142,8 @@ fn main() {
             pb,
             is_torrent,
             torrent_path,
+            i,
+            is_multi,
         ));
     }
 
