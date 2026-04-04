@@ -1,140 +1,108 @@
 # dl-rs
 
-A fast, multi-threaded command-line download manager built in Rust, powered by [aria2](https://github.com/aria2/aria2).
+A fast, configurable download manager written in Rust. Wraps [aria2](https://github.com/aria2/aria2) with a clean CLI interface, real-time progress bars, and persistent configuration.
 
 ## Features
 
-- **Multi-file downloads** — Download multiple URLs simultaneously with individual progress bars
-- **Torrent support** — Download `.torrent` files directly
-- **Batch downloads** — Pass a text file containing URLs (one per line, `#` for comments)
-- **Configurable connections** — Set the number of connections per download (default: 16)
-- **Custom download directory** — Override the default save location via CLI or config
-- **Persistent configuration** — Settings are saved and reused across sessions
-- **Real-time progress** — Color-coded progress bars with live speed indicators
-- **Ctrl+C support** — Graceful interruption with cleanup
-
-## Not Yet Supported
-
-- **Magnet links** — Magnet URI support is not yet implemented. This feature is planned for a future release.
+- **Multi-connection downloads** — configurable per-download connections (default: 16)
+- **Batch downloads** — pass multiple URLs or a file containing a list of URLs
+- **Torrent file support** — download `.torrent` files directly
+- **Progress bars** — real-time speed, ETA, and progress via `indicatif`
+- **Persistent config** — settings saved between runs
+- **Graceful shutdown** — Ctrl+C cleans up partial downloads and `.aria2` temp files
+- **Zero-config start** — works out of the box with sensible defaults
 
 ## Prerequisites
 
-- **Rust** (edition 2021+) — [Install Rust](https://rustup.rs/)
-- **aria2** — Must be installed and available in your `PATH`
-
-```bash
-# Ubuntu/Debian
-sudo apt install aria2
-
-# Arch Linux
-sudo pacman -S aria2
-
-# macOS
-brew install aria2
-
-# Fedora
-sudo dnf install aria2
-```
+- [Rust](https://rustup.rs/) (edition 2021 or later)
+- [aria2](https://github.com/aria2/aria2) (`aria2c` must be on your `PATH`)
 
 ## Installation
 
-### Online Install (from GitHub)
+### From source
 
 ```bash
-cargo install --git https://github.com/mohdismailmatasin/dl-rs.git
-```
-
-This will compile and install the `dl-rs` binary to your Cargo bin directory (`~/.cargo/bin`).
-
-### Local Install (from source)
-
-```bash
-git clone https://github.com/mohdismailmatasin/dl-rs.git
+git clone https://github.com/<your-username>/dl-rs.git
 cd dl-rs
-cargo install --path .
+./install.sh
 ```
 
-Or build directly:
+This builds the project in release mode and copies the binary to `~/.local/bin`. Make sure that directory is in your `PATH`.
+
+### Manual build
 
 ```bash
 cargo build --release
-sudo cp target/release/dl-rs /usr/local/bin/
+./target/release/dl-rs --help
 ```
 
-## Uninstallation
-
-### Online Uninstall
+## Uninstall
 
 ```bash
-cargo uninstall dl-rs
-```
-
-### Manual Uninstall
-
-```bash
-rm /usr/local/bin/dl-rs
-```
-
-To also remove the configuration files:
-
-```bash
-rm -rf ~/.config/dl-rs
+./uninstall.sh
 ```
 
 ## Usage
 
-### Single file download
+```
+dl-rs [OPTIONS] [URLS]...
+```
+
+### Arguments
+
+| Argument   | Description              |
+| ---------- | ------------------------ |
+| `[URLS]...`| One or more URLs, torrent file paths, or a text file containing URLs (one per line) |
+
+### Options
+
+| Flag                         | Description                        |
+| ---------------------------- | ---------------------------------- |
+| `-c, --connections <NUM>`    | Number of connections per download |
+| `-o, --dir <PATH>`           | Output directory                   |
+| `-h, --help`                 | Print help                         |
+
+### Examples
+
+**Single file download:**
 
 ```bash
 dl-rs https://example.com/file.zip
 ```
 
-### Multiple file downloads
+**Multiple files:**
 
 ```bash
-dl-rs https://example.com/file1.zip https://example.com/file2.zip
+dl-rs https://example.com/a.zip https://example.com/b.zip
 ```
 
-### Batch download from file
-
-Create a text file with one URL per line:
-
-```
-# My download list
-https://example.com/file1.zip
-https://example.com/file2.zip
-```
+**Download from a list file:**
 
 ```bash
-dl-rs links.txt
+dl-rs urls.txt
 ```
 
-### Custom connections
+The list file should contain one URL per line. Lines starting with `#` are treated as comments.
+
+**Torrent file:**
 
 ```bash
-dl-rs -c 32 https://example.com/file.zip
+dl-rs ubuntu-24.04.torrent
 ```
 
-### Custom download directory
+**Custom connections and output directory:**
 
 ```bash
-dl-rs -o /path/to/save https://example.com/file.zip
-```
-
-### Combined options
-
-```bash
-dl-rs -c 32 -o /tmp/downloads https://example.com/file.zip
+dl-rs -c 8 -o /mnt/data https://example.com/large-file.iso
 ```
 
 ## Configuration
 
-Configuration is stored at:
+On first run, `dl-rs` creates a config file at:
 
 - **Linux:** `~/.config/dl-rs/settings.conf`
-- **macOS:** `~/Library/Application Support/dl-rs/settings.conf`
 
-### Config file format
+The config uses a simple key-value format:
 
 ```ini
 # dl-rs configuration
@@ -144,50 +112,33 @@ download_dir = /home/user/Downloads
 connections = 16
 ```
 
-CLI flags (`-c`, `-o`) override the saved configuration for the current session.
+| Key             | Default             | Description                        |
+| --------------- | ------------------- | ---------------------------------- |
+| `download_dir`  | `~/Downloads`       | Default output directory           |
+| `connections`   | `16`                | Connections per download           |
 
-## Output
+Command-line arguments (`-c`, `-o`) override config values for the current run.
 
-### Single download
+## How it works
 
-```
-🔻️ Downloading 1 file(s)...
-⟪ + ⟫ https://example.com/file.zip
-⟪ = ⟫ 16
-⟪ / ⟫ /home/user/Downloads
+`dl-rs` is a wrapper around `aria2c`. On each invocation it:
 
-+ 124.2 KiB/s [████████████████████░░░░░░░░░░░░░░░░░░░░░░░░░] 240.00 KiB/1.00 MiB @ 26.59 KiB/s
+1. Spawns a private `aria2c` instance with an ephemeral RPC port
+2. Submits downloads via aria2's JSON-RPC API
+3. Polls status and renders live progress bars
+4. Cleans up the aria2 process and temporary files on completion or interrupt
 
-✓ Complete!
-  Total: 1.00 MiB
-  Completed: 1/1
-  Time: 15.8s
-```
+## Limitations
 
-### Multiple downloads
+### Magnet links — not yet supported
 
-```
-🔻️ Downloading 3 file(s)...
-⟪ + 1 ⟫ https://example.com/1Mb.dat
-⟪ + 2 ⟫ https://example.com/10Mb.dat
-⟪ + 3 ⟫ https://example.com/100Mb.dat
-⟪ = ⟫ 16
-⟪ / ⟫ /home/user/Downloads
+Magnet URI (`magnet:?xt=urn:btih:...`) downloads are **not ready**. Currently only:
 
-+ 1 @ 124.2 KiB/s [██████████▓░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 240.00 KiB/1.00 MiB @ 26.59 KiB/s
-+ 2 @ 658.0 KiB/s [██████▒░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 1.38 MiB/10.00 MiB @ 110.21 KiB/s
-+ 3 @ 14627.1 KiB/s [███████████████▓░░░░░░░░░░░░░░░░░░░░░░░░░░░] 37.20 MiB/100.00 MiB @ 2.44 MiB/s
+- HTTP/HTTPS URLs
+- Local `.torrent` files
 
-✓ Complete!
-✓ Complete!
-✓ Complete!
-  Total: 111.00 MiB
-  Completed: 3/3
-  Time: 27.1s
-```
+are supported. Magnet link support is planned for a future release.
 
 ## License
 
-Copyright © 2026 Mohd Ismail Mat Asin. All rights reserved.
-
-This software is proprietary. Unauthorized copying, distribution, or modification is strictly prohibited without explicit permission from the copyright holder.
+See [LICENSE](LICENSE).
