@@ -13,6 +13,10 @@ A fast, multi-threaded command-line download manager built in Rust, powered by [
 - **Real-time progress** — Color-coded progress bars with live speed indicators
 - **Ctrl+C support** — Graceful interruption with cleanup
 
+## Not Yet Supported
+
+- **Magnet links** — Magnet URI support is not yet implemented. This feature is planned for a future release.
+
 ## Prerequisites
 
 - **Rust** (edition 2021+) — [Install Rust](https://rustup.rs/)
