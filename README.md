@@ -22,7 +22,7 @@ A fast, configurable download manager written in Rust. Wraps [aria2](https://git
 ### From source
 
 ```bash
-git clone https://github.com/<your-username>/dl-rs.git
+git clone https://github.com/mohdismailmatasin/dl-rs.git
 cd dl-rs
 ./install.sh
 ```
